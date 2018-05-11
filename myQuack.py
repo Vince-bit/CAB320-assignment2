@@ -140,12 +140,54 @@ def build_SVM_classifier(X_training, y_training):
     raise NotImplementedError()
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    
+def random_split(X, y, ratio):
+    '''
+    Split the given data (and corresponding labels) into training and testing 
+     datasets based on the ratio given. 
+        
+    @param
+     X : 2D np.ndarray, X[i,:] is the ith example
+     y : 1D np.ndarray, y[i] is the class label of X[i,:]
+     ratio : ratio of training:testing data (i.e. 0.8 represents 80% training
+             and 20% testing)
+    
+    @return:
+     X_train : 2D array of examples for training
+     y_train : 1D array of corresponding labels for training
+     X_test : 2D array of examples for testing
+     y_test : 1D array of corresponding labels for training
+    '''
+    assert(ratio>0 and ratio<1)
+    assert(X.ndim==2 and y.ndim==1)
+    
+    # Create small and large arrays of random indexes according to ratio.
+    indexes = np.arange(len(y))
+    np.random.shuffle(indexes)
+    train_idx = indexes[:int(len(indexes)*ratio)]
+    test_idx = indexes[int(len(indexes)*ratio):]
+    
+    X_train = X.copy()[train_idx]
+    y_train = y.copy()[train_idx]
+    X_test = X.copy()[test_idx]
+    y_test = y.copy()[test_idx]
+    
+    return X_train, y_train, X_test, y_test
+    
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 
 if __name__ == "__main__":
+   # Print the team.
     print(my_team())
-    data, labels = prepare_dataset('medical_records.data')
-    print(data)
-    print(labels)
     
+    # Pre-process the dataset.
+    data, labels = prepare_dataset('medical_records.data')
+    #print(data)
+    #print(labels)
+    
+    # Split the dataset into the corresponding ratio for crossvalidation. 
+    traindata, trainlabel, testdata, testlabel = random_split(data, labels, 0.8)
+    print(testlabel)
 
 
