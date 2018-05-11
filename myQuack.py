@@ -10,7 +10,8 @@ and repeat your experiments.
 
 
 '''
-
+import numpy as np
+import sklearn
 
 
 
@@ -23,7 +24,7 @@ def my_team():
     of triplet of the form (student_number, first_name, last_name)
     
     '''
-    return [ (10155856, 'Mackenzie', 'Wilson'), (1234568, 'Nicole', 'Barritt') ]
+    return [ (10155856, 'Mackenzie', 'Wilson'), (10157182, 'Nicole', 'Barritt') ]
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -45,8 +46,34 @@ def prepare_dataset(dataset_path):
     @return
 	X,y
     '''
-    ##         "INSERT YOUR CODE HERE"    
-    raise NotImplementedError()
+    # Read the file elements (separated by commas) into a np array.
+    file_as_array = np.genfromtxt(dataset_path, dtype='str', delimiter=',')
+    '''
+    Array format: (all as strings currently)
+             0           1         2         3       ....
+    [ 
+     0    [ ID#,  Class label,  feature1,  feature2, .... ] 
+     1     ...
+    ]
+    '''
+    
+    # Store the file's shape as variables to use later.
+    num_examples = file_as_array.shape[0]
+    num_features = file_as_array.shape[1]
+    
+    # Create an array to store all file data except the class labels (col 1).
+    X = np.zeros((num_examples, num_features-1)) #dtype = float (default)
+    X[:,0] = file_as_array.copy()[:,0] #automatically converts to floats
+    X[:,1:] = file_as_array[:,2:] 
+    
+    # Create a 1D array to store all the class labels ('B' or 'M').
+    y = file_as_array.copy()[:,1]
+    # Use a mask to change to binary, where M=1 (True).
+    y[y=='M'] = 1
+    y[y=='B'] = 0
+    
+    
+    return X,y
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -116,7 +143,9 @@ def build_SVM_classifier(X_training, y_training):
 
 if __name__ == "__main__":
     print(my_team())
-    # call your functions here
+    data, labels = prepare_dataset('medical_records.data')
+    print(data)
+    print(labels)
     
 
 
