@@ -9,9 +9,30 @@ Write a main function that calls the different functions to perform the required
 and repeat your experiments.
 
 
+
+USEFUL SKLEARN FUNCTIONS:
+    neighbors.KNeighborsClassifier
+    
+    naive_bayes.GaussianNB
+    
+    model_selection.cross_validate
+    
+    svm.SVC
+    
+    tree.DecisionTreeClassifier
+    
+    model_selection.train_test_split
+    
+    metrics.classification_report
+    metrics.confusion_matrix
+
+
+
+
 '''
 import numpy as np
-import sklearn
+import pandas as pd
+from sklearn import naive_bayes, neighbors, tree, svm, model_selection, metrics
 
 
 
@@ -48,14 +69,6 @@ def prepare_dataset(dataset_path):
     '''
     # Read the file elements (separated by commas) into a np array.
     file_as_array = np.genfromtxt(dataset_path, dtype='str', delimiter=',')
-    '''
-    Array format: (all as strings currently)
-             0           1         2         3       ....
-    [ 
-     0    [ ID#,  Class label,  feature1,  feature2, .... ] 
-     1     ...
-    ]
-    '''
     
     # Store the file's shape as variables to use later.
     num_examples = file_as_array.shape[0]
@@ -67,17 +80,17 @@ def prepare_dataset(dataset_path):
     X[:,1:] = file_as_array[:,2:] 
     
     # Create a 1D array to store all the class labels ('B' or 'M').
-    y = file_as_array.copy()[:,1]
-    # Use a mask to change to binary, where M=1 (True).
-    y[y=='M'] = 1
-    y[y=='B'] = 0
+    y = np.zeros_like(file_as_array[:,1], dtype=int)
+    for i in range(len(y)):
+        # Store a binary 1 for M, 0 for B
+        y[i] = (file_as_array[i,1]=='M')
     
     
     return X,y
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def build_NB_classifier(X_training, y_training):
+def build_NB_classifier(X_training, y_training, params):
     '''  
     Build a Naive Bayes classifier based on the training set X_training, y_training.
 
@@ -93,7 +106,7 @@ def build_NB_classifier(X_training, y_training):
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def build_DT_classifier(X_training, y_training):
+def build_DT_classifier(X_training, y_training, params):
     '''  
     Build a Decision Tree classifier based on the training set X_training, y_training.
 
@@ -120,9 +133,12 @@ def build_NN_classifier(X_training, y_training):
     @return
 	clf : the classifier built in this function
     '''
-    ##         "INSERT YOUR CODE HERE"    
-    raise NotImplementedError()
 
+    knn = neighbors.KNeigborsClassifier()    
+    clf = model_selection.GridSearchCV(knn, params, cv=4) 
+    clf.fit(X_training, y_training)
+    
+    return clf #automatically uses the best estimator for predictions
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 def build_SVM_classifier(X_training, y_training):
@@ -140,54 +156,218 @@ def build_SVM_classifier(X_training, y_training):
     raise NotImplementedError()
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     
-def random_split(X, y, ratio):
+def split_data(data, label, ratio):
     '''
     Split the given data (and corresponding labels) into training and testing 
-     datasets based on the ratio given. 
+     datasets based on the ratio given. Repeatable and non-random.
         
     @param
-     X : 2D np.ndarray, X[i,:] is the ith example
-     y : 1D np.ndarray, y[i] is the class label of X[i,:]
-     ratio : ratio of training:testing data (i.e. 0.8 represents 80% training
-             and 20% testing)
+     data : 2D np.ndarray, X[i,:] is the ith example
+     labels : 1D np.ndarray, y[i] is the class label of X[i,:]
+     ratio : decimal ratio of training:testing data (i.e. 0.8 represents 80% 
+             training and 20% testing)
     
     @return:
-     X_train : 2D array of examples for training
-     y_train : 1D array of corresponding labels for training
-     X_test : 2D array of examples for testing
-     y_test : 1D array of corresponding labels for training
+     data_train : 2D array of examples for training
+     label_train : 1D array of corresponding labels for training
+     data_test : 2D array of examples for testing
+     label_test : 1D array of corresponding labels for training
     '''
     assert(ratio>0 and ratio<1)
-    assert(X.ndim==2 and y.ndim==1)
+    assert(data.ndim==2 and label.ndim==1)
     
-    # Create small and large arrays of random indexes according to ratio.
-    indexes = np.arange(len(y))
-    np.random.shuffle(indexes)
-    train_idx = indexes[:int(len(indexes)*ratio)]
-    test_idx = indexes[int(len(indexes)*ratio):]
+    # Create small and large arrays of data and labels according to ratio.
+    data_train = data.copy()[:int(len(data)*ratio)]
+    label_train = label.copy()[:int(len(data)*ratio)]
+    data_test = data.copy()[int(len(data)*ratio):]
+    label_test = label.copy()[int(len(data)*ratio):]
     
-    X_train = X.copy()[train_idx]
-    y_train = y.copy()[train_idx]
-    X_test = X.copy()[test_idx]
-    y_test = y.copy()[test_idx]
+    return data_train, label_train, data_test, label_test
     
-    return X_train, y_train, X_test, y_test
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    
+def print_prediction_report(y_true, y_pred, names):
+    '''
+    Return a bunch of statistics and metrics reporting the performance of a 
+     certain classifier model on the given training data. 
+     
+    @param:
+        y_true: A np-array of the target class labels as integers
+        y_pred: A np-array of the classifier-predicted class labels as integers
+        names: A tuple of the class labels (str), corresponding to (1,0) 
+               binary integer class labels.
+               
+    @return:
+        None. Print to console. 
+    '''
+    
+    #classification report
+    cr = metrics.classification_report(y_true, y_pred, labels, target_names=names)
+    #confusion matrix
+    cm = metrics.confusion_matrix(y_true, y_pred, labels = (1,0))
+    display_confusion_matrix(cm, names)
+
+    raise NotImplementedError
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+def display_confusion_matrix(cm, labels):
+    '''
+    Print the confusion matrix values in a nicely formatted table. This is all 
+     ugly code so it is separated out and put into this callable function.
+    
+    @param:
+        cm: a 2x2 array
+        labels: a tuple of 2 labels corresponding to (1,0) binary markings
+        
+    @return:
+        None. Print to console. 
+    '''
+    
+    assert len(labels)==len(cm)
+    assert cm.shape == (2,2)
+    
+    print('{:14} {:10} {:10} {:3}'.format('PREDICTED:',labels[0], labels[1], 'All'))
+    print("\nACTUAL: ")
+    print('\n{:14} {:<10} {:<10} {:3}'.format('',"TP:", "FN:", ''))
+    print('{:14} {:<10} {:<10} {:<3}'.format(labels[0],cm[0,0], cm[0,1], sum(cm[0])))
+    print('\n{:14} {:<10} {:<10} {:3}'.format('',"FP:", "TN:", ''))
+    print('{:14} {:<10} {:<10} {:<3}'.format(labels[1],cm[1,0], cm[1,1], sum(cm[1])))
+    print('\n{:14} {:<10} {:<10} {:<3}'.format('All',sum(cm[:,0]), sum(cm[:,1]), sum(sum(cm))))
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+def print_cross_val_report(grid):
+    '''
+    Print nicely formatted statistics from GridSearchCV results. This includes
+     the mean and std statistics for all scores used (2), on both training and
+     test data (known as validation dataset).
+     
+    @param:
+        grid: a GridSearchCV object that has been fitted and therefore is 
+              available for access through cv_results_
+    
+    @return:
+        None. Print to console. 
+    '''
+
+    r = grid.cv_results_
+    i = grid.best_index_
+    
+    #can access values like follows:
+    r['mean_test_score'][i]
+    r['std_test_score'][i]
+    
+    raise NotImplementedError    
+    
     
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
 if __name__ == "__main__":
-   # Print the team.
+# ------------------- HYPERPARAMETERS TO TEST -------------------------
+    # Change these as required. 
+    NB_params = {
+                'priors': range(0,5)
+                } 
+    
+    DT_params = {
+                'max_depth': range(0,5)
+                } 
+    
+    NN_params = {
+                'n_neighbours': np.linspace(1,200, 200)
+                } 
+    
+    SVM_params ={
+                'gamma': range(0,5)
+                } 
+# ---------------------------------------------------------------------
+
+    # Store the CLASS LABELS.
+    target_names = ("Malignant", "Benign") # corresponding to (1,0) binary values
+    
+    
+    # Print the team.
     print(my_team())
     
     # Pre-process the dataset.
     data, labels = prepare_dataset('medical_records.data')
-    #print(data)
-    #print(labels)
     
     # Split the dataset into the corresponding ratio for crossvalidation. 
-    traindata, trainlabel, testdata, testlabel = random_split(data, labels, 0.8)
-    print(testlabel)
+    train_data, train_labels, test_data, test_labels = split_data(data, labels, 0.8)
+    
+    # Store a list of all parameters necesary for testing and classification
+    classifier_list = [["Naive Bayes", build_NB_classifier, NB_params],
+                       ["Decision Tree", build_DT_classifier, DT_params],
+                       ["Nearest Neighbors", build_NN_classifier, NN_params],
+                       ["Support Vector Machine", build_SVM_classifier, SVM_params]]
 
+    # Analyze each classifier. 
+    for name, function, params in classifier_list:
+        
+        # Create appropriate optimized classifier and report validation metrics.
+        clf = function(train_data, train_labels, params)
+        print_cross_val_report(clf)
+        
+        # Quantify the classifier's performance on the TRAINING set.
+        prediction_train_labels = clf.predict(train_data)
+        print_prediction_report(prediction_train_labels, train_labels)
+        
+        # Quantify the classifier's performance on TEST SET. 
+        prediction_labels = clf.predict(test_data)
+        print_prediction_report(prediction_labels, test_labels)
+        
+
+    '''
+    OVERALL STRUCTURE: (this is now INCORRECT)
+        
+    Print the team.
+    
+    Prepare dataset. 
+    ->function: prepare_dataset()
+    
+    Split data into TEST(20%) and TRAINING(80%) sets. 
+    ->function: split_data()
+    
+    For each classifier type:
+        
+        Select a hyperparameter if available/necessary. (manual)
+        
+        For each value of selected hyperparameter:
+            
+            Run k-fold cross-validation.
+            -> function: cross_validation() or cross_validation_hyperparameter()
+            
+                Divide data into k-folds 
+                -> function: make_k_folds()
+                
+                For each unique combo of k-1 folds ("training data"):
+                    
+                    Run experiment. 
+                    -> function: run_experiment()
+                    
+                        Build the classifier with k-1 folds as TRAINING
+                        -> function: build_AB_classifier()
+                        
+                        Test classifier with kth folds as VALIDATION
+                        -> function test_classifier()
+                
+            Average performance data for all folds/experiments.
+            Store as performance data for the selected HP-VALUE. 
+        
+        Build classifier with entire TRAINING set and best HP-VALUE.
+            
+        Test the classifier with TEST set. 
+        -> function test_classifier()
+        
+        Return the performance metrics for TEST set. 
+        Return performance metrics for TRAINING, and VALIDATION data for the 
+         "best" HP-VALUE.
+    
+    '''
 
