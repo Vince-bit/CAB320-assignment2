@@ -34,16 +34,15 @@ and repeat your experiments.
 
 
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn import naive_bayes, neighbors, tree, svm, model_selection, metrics
 import warnings 
-
+import time
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #                              REQUIRED FUNCTIONS
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-
 
 def my_team():
     '''
@@ -97,7 +96,8 @@ def prepare_dataset(dataset_path):
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def build_NB_classifier(X_training, y_training, params):
+
+def build_NB_classifier(X_training, y_training):
     '''  
     Build a Naive Bayes classifier based on the training set X_training, 
      y_training, optimized for the hyperparameters passed.
@@ -105,36 +105,39 @@ def build_NB_classifier(X_training, y_training, params):
     @param 
         X_training: X_training[i,:] is the ith example
         y_training: y_training[i] is the class label of X_training[i,:]
-        params: a dict of form:
-                     {'parameter name (str)': [parameter range (np.array)]},
-                with only one parameter for the purpose of this assignment. 
 
     @return
         nbc: the naive bayes classifier built in this function
+        results: the dict of scores returned by cross validation, since 
+            GridSearchCV would also return this but it cannot be used for 
+            NB with no hyperparameter to optimize, and CV must be done before
+            fitting takes place (and fitting happens here)
     '''
-    print("\nBuilding and optimizing...")
-
-    # Instantiate a GridSearchCV object of NB classifier type.
-    nbc = model_selection.GridSearchCV( naive_bayes.GaussianNB(), 
-                                        return_train_score=True,
-                                        cv=4,
-                                        scoring=['accuracy', 'precision', 'roc_auc', 'recall'],
-                                        refit='accuracy'
-                                        )  
     
-    # Fit the data, which will run k-fold cross-validation on X_training. 
-    with warnings.catch_warnings(): 
-        # Prevent warnings from printing (and ruining all my nice formatting!!)
-        warnings.simplefilter("ignore")
-        nbc.fit(X_training, y_training)
+    print_clf_intro("NAIVE BAYES")
     
-    # Return the GridSearchCV object, which automatically uses the best 
-    # estimator for predictions, but also allows access to cv_results_.
-    return nbc
+    # Instantiate a Multinomial NB classifier.
+    nbc = naive_bayes.MultinomialNB()
+    
+    # Perform cross validation and store results. 
+    results = model_selection.cross_validate(nbc, X_training, y_training, 
+                                             return_train_score=True,
+                                             scoring=['accuracy', 
+                                                      'precision', 
+                                                      'roc_auc', 
+                                                      'recall',
+                                                      'f1'])
+    
+    # Fit the data with X-training.
+    nbc.fit(X_training, y_training)
+    
+    # Return the classifier object and CV results. 
+    return nbc, results
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    
 
-def build_DT_classifier(X_training, y_training, params):
+def build_DT_classifier(X_training, y_training):
     '''  
     Build a Decision Tree classifier based on the training set X_training, 
      y_training, optimized for the hyperparameters passed.
@@ -142,32 +145,48 @@ def build_DT_classifier(X_training, y_training, params):
     @param 
         X_training: X_training[i,:] is the ith example
         y_training: y_training[i] is the class label of X_training[i,:]
-        params: a dict of form:
-                     {'parameter name (str)': [parameter range (np.array)]},
-                with only one parameter for the purpose of this assignment. 
 
     @return
-        dtc: the decision tree classifier built in this function
+        dtc: the decision tree classifier built in this function (i.e. a 
+            GridSearchCV object that is usable exactly as a clf object, but
+            allows access to scores from HP optimization)
     '''
-    print("\nBuilding and optimizing...")
-        
-    dtc = model_selection.GridSearchCV( tree.DecisionTreeClassifier(), 
+    
+    # HYPERPARAMTER TO OPTIMIZE: NAME AND TEST RANGE
+    params = { 'max_depth': np.linspace(1,100,100, dtype=int) } 
+    print_clf_intro("DECISION TREE", params)   
+    
+    # Instantiate a GridSearchCV object of Decision Tree classifier type.
+    # Pass an int to random_state to ensure repeatability.
+    dtc = model_selection.GridSearchCV( tree.DecisionTreeClassifier(random_state=5), 
                                         params, 
                                         return_train_score=True,
-                                        cv=4,
-                                        scoring=['accuracy', 'precision', 'roc_auc', 'recall'],
-                                        refit='accuracy'
+    #                                    cv=4, #use default 3 or uncomment
+                                        scoring=['accuracy',
+                                                 'roc_auc',
+                                                 'precision', 
+                                                 'recall',
+                                                 'f1'],
+                                        refit='roc_auc'
                                         )
-    
+       
+    # Fit the data, which will run k-fold cross-validation on X_training.    
     with warnings.catch_warnings():
+        # Prevent warnings from printing (and ruining all my nice formatting!!)
+        # Warnings tell us that some precision values are zero, but they are 
+        # for parameter values that are BAD and wont be used anyways, so it
+        # isnt an issue but we still need to test them in GridSearchCV.        
         warnings.simplefilter("ignore")  
         dtc.fit(X_training, y_training)
     
+    # Return the GridSearchCV object, which automatically uses the best 
+    # estimator for predictions, but also allows access to cv_results_.
     return dtc 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    
 
-def build_NN_classifier(X_training, y_training, params):
+def build_NN_classifier(X_training, y_training):
     '''  
     Build a Nearrest Neighbours classifier based on the training set X_training, 
     y_training, optimized for the hyperparameters passed. 
@@ -175,94 +194,97 @@ def build_NN_classifier(X_training, y_training, params):
     @param 
         X_training: X_training[i,:] is the ith example
         y_training: y_training[i] is the class label of X_training[i,:]
-        params: a dict of form:
-                     {'parameter name (str)': [parameter range (np.array)]},
-                with only one parameter for the purpose of this assignment. 
 
     @return
-        knn: the k-nearest neighbors classifier built in this function
+        knn: the k-nearest neighbors classifier built in this function (i.e. a 
+            GridSearchCV object that is usable exactly as a clf object, but
+            allows access to scores from HP optimization)
     '''
-    print("\nBuilding and optimizing...")
-        
+    
+    # HYPERPARAMETER TO OPTIMIZE: NAME AND TEST RANGE
+    params = { 'n_neighbors': np.linspace(1,200, 200, dtype=int) } 
+    print_clf_intro("NEAREST NEIGHBOR", params)
+      
+    # Instantiate a GridSearchCV object of KNN classifier type.
     knn = model_selection.GridSearchCV( neighbors.KNeighborsClassifier(), 
                                         params, 
                                         return_train_score=True,
-                                        cv=4,
-                                        scoring=['accuracy', 'precision', 'recall', 'roc_auc'],
-                                        refit='accuracy'
-                                        )  
+    #                                    cv=4, #use default 3 or uncomment
+                                        scoring=['accuracy', 
+                                                 'roc_auc',
+                                                 'precision', 
+                                                 'recall',
+                                                 'f1'],
+                                        refit='roc_auc'
+                                        )      
     
+    # Fit the data, which will run k-fold cross-validation on X_training.
     with warnings.catch_warnings():
+        # Prevent warnings from printing (and ruining all my nice formatting!!)
+        # Warnings tell us that some precision values are zero, but they are 
+        # for parameter values that are BAD and wont be used anyways, so it
+        # isnt an issue but we still need to test them in GridSearchCV.
         warnings.simplefilter("ignore")
         knn.fit(X_training, y_training)
     
+    # Return the GridSearchCV object, which automatically uses the best 
+    # estimator for predictions, but also allows access to cv_results_.
     return knn
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    
 
-def build_SVM_classifier(X_training, y_training, params):
+def build_SVM_classifier(X_training, y_training):
     '''     
     Build a Support Vector Machine classifier based on the training set X_training, y_training.
 
     @param 
         X_training: X_training[i,:] is the ith example
         y_training: y_training[i] is the class label of X_training[i,:]
-        params: a dict of form:
-                     {'parameter name (str)': [parameter range (np.array)]},
-                with only one parameter for the purpose of this assignment. 
 
     @return
-        svm: the svm classifier built in this function
+        svm: the svm classifier built in this function (i.e. a GridSearchCV 
+            object that is usable exactly as a clf object, but allows access 
+            to scores from HP optimization)
     '''
-    print("\nBuilding and optimizing...")
+    
+    # HYPERPARAMETER TO OPTIMIZE: NAME AND TEST RANGE
+    params ={ 'gamma': np.logspace(-10, 1, 100) } 
+    print_clf_intro("SUPPORT VECTOR MACHINE", params)
         
-    svc = model_selection.GridSearchCV( svm.LinearSVC(), 
+    # Instantiate a GridSearchCV object of SVC classifier type.
+    svc = model_selection.GridSearchCV( svm.SVC(), #to allow neg_log_loss 
                                         params, 
                                         return_train_score=True,
-                                        cv=4,
-                                        scoring=['accuracy', 'precision', 'roc_auc', 'recall'],
-                                        refit='accuracy'
+    #                                    cv=4, #use default of 3, or uncomment
+                                        scoring=['accuracy', 
+                                                 'roc_auc',
+                                                 'precision', 
+                                                 'recall',
+                                                 'f1', ],
+                                        refit='roc_auc'
                                         )  
-    
+        
+    # Fit the data, which will run k-fold cross-validation on X_training.
     with warnings.catch_warnings():
+        # Prevent warnings from printing (and ruining all my nice formatting!!)
+        # Warnings tell us that some precision values are zero, but they are 
+        # for parameter values that are BAD and wont be used anyways, so it
+        # isnt an issue but we still need to test them in GridSearchCV.
         warnings.simplefilter("ignore")
         svc.fit(X_training, y_training)
     
+    # Return the GridSearchCV object, which automatically uses the best 
+    # estimator for predictions, but also allows access to cv_results_.
     return svc
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-#                            ADDITIONAL FUNCTIONS 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def split_data(data, label, ratio):
-    '''
-    Split the given data (and corresponding labels) into training and testing 
-     datasets based on the ratio given. ** Repeatable and non-random. **
-        
-    @param
-        data: 2D np.ndarray, X[i,:] is the ith example
-        labels: 1D np.ndarray, y[i] is the class label of X[i,:]
-        ratio: decimal ratio of training:original data (i.e. 0.8 represents 80% 
-               training and 20% testing from 100% original data)
-    
-    @return:
-        data_train:  2D array of examples for training
-        label_train: 1D array of corresponding labels for training
-        data_test: 2D array of examples for testing
-        label_test: 1D array of corresponding labels for training
-    '''
-    #defense 
-    assert(ratio>0 and ratio<1)
-    assert(data.ndim==2 and label.ndim==1)
-    
-    # Create small and large arrays of data and labels according to ratio.
-    data_train = data.copy()[:int(len(data)*ratio)]
-    label_train = label.copy()[:int(len(data)*ratio)]
-    data_test = data.copy()[int(len(data)*ratio):]
-    label_test = label.copy()[int(len(data)*ratio):]
-    
-    return data_train, label_train, data_test, label_test
-    
+
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+#                            ADDITIONAL FUNCTIONS 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     
 def print_prediction_report(y_pred, y_true, names):
@@ -279,43 +301,69 @@ def print_prediction_report(y_pred, y_true, names):
     @return:
         None. Print to console. 
     '''
-    labels = [1,0]
-    #classification report
-    cr = metrics.classification_report(y_true, y_pred, labels, target_names=names)
-    #confusion matrix
-    cm = metrics.confusion_matrix(y_true, y_pred, labels = (1,0))
-    display_confusion_matrix(cm, names)
-
-    #raise NotImplementedError
-    pass
+    
+    labels = (1,0)
+    
+    # Confusion matrix.
+    print('\nConfusion Matrix:') 
+    cm = metrics.confusion_matrix(y_true, y_pred, labels)
+    assert len(names)==len(cm)
+    assert cm.shape == (2,2)   
+    print('{:14} {:10} {:10} {:3}'.format('PREDICTED:',names[0], names[1], 'All'))
+    print("ACTUAL: ")
+    print('{:14} {:3} {:3} {:1} {:2} {:3} {:5}'.format(names[0], '(TP)', cm[0,0], '','(FN)', cm[0,1], sum(cm[0])))
+    print('{:14} {:3} {:3} {:1} {:2} {:3} {:5}'.format(names[1], '(FP)', cm[1,0], '','(TN)', cm[1,1], sum(cm[1])))
+    print('{:14} {:8} {:10} {:5}'.format('All',sum(cm[:,0]), sum(cm[:,1]), sum(sum(cm))))
+    
+    # Classification report.
+    print("\nClassification Report:")
+    print(metrics.classification_report(y_true, y_pred, labels, target_names=names))
+    
+    # Miscellaneous metrics.
+    print("\nOverall Metrics:")
+    print('{:14} {:.2f}'.format('accuracy:', metrics.accuracy_score(y_true, y_pred) ))
+    print('{:14} {:.2f}'.format('roc_auc:', metrics.roc_auc_score(y_true, y_pred) ))
+    print('{:14} {:.2f}'.format('precision:', metrics.precision_score(y_true, y_pred) ))
+    print('{:14} {:.2f}'.format('recall:', metrics.recall_score(y_true, y_pred) ))
+    print('{:14} {:.2f}'.format('f1:', metrics.f1_score(y_true, y_pred) ))
+    print('{:14} {:.2f}'.format('lgrthmc loss:', metrics.log_loss(y_true, y_pred) ))
+    print('{:14} {:.2f}'.format('mse:', metrics.mean_squared_error(y_true, y_pred) ))
+    print('{:14} {:.2f}'.format('variance:', metrics.explained_variance_score(y_true, y_pred) ))
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-def display_confusion_matrix(cm, labels):
-    '''
-    Print the confusion matrix values in a nicely formatted table. This is all 
-     ugly code so it is separated out and put into this callable function.
     
+    
+def print_cv_report(r):
+    '''
+    Print nicely formatted statistics from GridSearchCV results. This includes
+     the mean and std statistics for all scores used (2), on both training and
+     test data (known as validation dataset).
+     
     @param:
-        cm: a 2x2 array
-        labels: a tuple of 2 labels corresponding to (1,0) binary markings
-        
+        results: a dict of results from running sklearn.model_selection.cross_validate,
+                 scored by accuracy, roc_auc, precision and recall. 
+    
     @return:
         None. Print to console. 
     '''
     
-    assert len(labels)==len(cm)
-    assert cm.shape == (2,2)
-
-    print('\nConfusion Matrix:')    
-    print('{:14} {:10} {:10} {:3}'.format('PREDICTED:',labels[0], labels[1], 'All'))
-    print("ACTUAL: ")
-    print('{:14} {:<3} {:<6} {:<3} {:<6} {:<3}'.format(labels[0],cm[0,0], '(TP)', cm[0,1], '(FN)', sum(cm[0])))
-    print('{:14} {:<3} {:<6} {:<3} {:<6} {:<3}'.format(labels[1],cm[1,0], '(FP)', cm[1,1], '(TN)', sum(cm[1])))
-    print('{:14} {:<10} {:<10} {:<3}'.format('All',sum(cm[:,0]), sum(cm[:,1]), sum(sum(cm))))
-
+    score_grid = ["accuracy", "precision", "recall", "f1", "roc_auc"]
+    
+    # Print title bar.
+    print("\n\n- - - VALIDATION REPORT - - -") 
+    
+    # Print training and test ("validation") scores on all metrics. 
+    print('\n{:12} {:10} {:10}'.format('', 'TRAINING', 'VALIDATION'))
+    for metric in score_grid:
+        print('{:12} {:8.2f} {:12.2f}'.format(metric + ':', 
+                                              np.mean(r['train_%s' % metric]),
+                                              np.mean(r['test_%s' % metric] )))
+    
+    print('\nMean fit time: {:.6f} seconds'.format(np.mean(r['fit_time'])))
+    print('Mean score time: {:.6f} seconds'.format(np.mean(r['score_time'])))
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 
 def print_grid_search_report(grid):
     '''
@@ -324,8 +372,9 @@ def print_grid_search_report(grid):
      test data (known as validation dataset).
      
     @param:
-        grid: a GridSearchCV object that has been fitted and therefore is 
-              available for access through cv_results_
+        grid: a GridSearchCV object scored by accuracy, roc_auc, precision and 
+              recall, that has been fitted and therefore is available for 
+              access through cv_results_
     
     @return:
         None. Print to console. 
@@ -333,54 +382,55 @@ def print_grid_search_report(grid):
 
     r = grid.cv_results_
     i = grid.best_index_
+    score_grid = clf.scoring
         
     # Print the parameter optimized and the ideal value found
-    print("\n\n- - - CROSS-VALIDATION REPORT - - -")
-    print("Based on {}, the best value for hyperparameter '{}' is:\n{}".format(
-                                        list(grid.scorer_.keys())[0], 
+    print("\n\n- - - VALIDATION REPORT - - -")
+    print("Based on validation {} scores, the best value for hyperparameter '{}' is:\n{}".format(
+                                        grid.refit, 
                                         list(grid.best_params_.keys())[0], 
-                                        list(grid.best_params_.values())[0]) )
+                                        list(grid.best_params_.values())[0]) ) 
     
     # For the ideal parameter value, print train and test ("validation") scores
-    print('\n{:17} {:18} {:15}'.format('', 'TRAINING', 'VALIDATION'))
+    print('\n{:12} {:10} {:10}'.format('', 'TRAINING', 'VALIDATION'))
+    for metric in score_grid:
+        print('{:12} {:8.2f} {:12.2f}'.format(metric + ':', 
+                                              r['mean_train_%s' % metric][i],
+                                              r['mean_test_%s' % metric][i] ))
     
-    print('{:17} {:<5} {} {:<8} {:<5} {} {:<8}'.format('Accuracy:', 
-                                       round(r['mean_train_accuracy'][i], 3),
-                                       '+/-',
-                                       round(r['std_train_accuracy'][i], 3),
-                                       round(r['mean_test_accuracy'][i], 3),
-                                       '+/-',
-                                       round(r['std_test_accuracy'][i], 3)))
-    
-    print('{:17} {:<5} {} {:<8} {:<5} {} {:<8}'.format('Area Under ROCC:', 
-                                       round(r['mean_train_roc_auc'][i], 3),
-                                       '+/-',
-                                       round(r['std_train_roc_auc'][i], 3),
-                                       round(r['mean_test_roc_auc'][i], 3),
-                                       '+/-',
-                                       round(r['std_test_roc_auc'][i], 3)))
-    
-    print('{:17} {:<5} {} {:<8} {:<5} {} {:<8}'.format('Precision:', 
-                                       round(r['mean_train_precision'][i], 3),
-                                       '+/-',
-                                       round(r['std_train_precision'][i], 3),
-                                       round(r['mean_test_precision'][i], 3),
-                                       '+/-',
-                                       round(r['std_test_precision'][i], 3)))
-    
-    print('{:17} {:<5} {} {:<8} {:<5} {} {:<8}'.format('Recall:', 
-                                       round(r['mean_train_recall'][i], 3),
-                                       '+/-',
-                                       round(r['std_train_recall'][i], 3),
-                                       round(r['mean_test_recall'][i], 3),
-                                       '+/-',
-                                       round(r['std_test_recall'][i], 3)))
-    
-    print('\nMean fit time: {:.8f}'.format(r['mean_fit_time'][i]))
-    print('Mean score time: {:.8f}'.format(r['mean_score_time'][i]))
+    print('\nMean fit time: {:.6f} seconds'.format(r['mean_fit_time'][i]))
+    print('Mean score time: {:.6f} seconds'.format(r['mean_score_time'][i]))
 
-    
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+def plot_grid_search_results(clf): 
+    # Organize data and labels
+    param_name = list(clf.param_grid.keys())[0]
+    param_vals = list(clf.param_grid.values())[0]
+    metrics = clf.scoring    
+    score_grid = []
+    for name in metrics:
+        score_grid.append(clf.cv_results_['mean_test_%s' % name])
+
+    # Plot the organized data and labels
+    p = plt
+    idx=0
+    for scores in score_grid:
+        p.plot(param_vals, scores, '-', label=metrics[idx])
+        idx+=1
+        
+    # Configure plot and show
+    p.title("Hyperparameter Optimization by Cross-Validation")
+    p.xlabel(param_name + " value")
+    if param_name =='gamma': p.xscale('log')
+    p.ylabel('average test score')
+    p.legend(loc="lower right")
+    p.grid(True)
+    p.show()
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 
 def print_introduction(team_array):
     '''
@@ -402,8 +452,8 @@ def print_introduction(team_array):
     for person in team_array:
         print('{:4} {:4} {:10} {:10}'.format(person[0],':',person[1], person[2]))
     
-    
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    
     
 def print_clf_intro(name, params=None):
     '''
@@ -421,44 +471,39 @@ def print_clf_intro(name, params=None):
     print("* {} CLASSIFIER".format(name))
     if(params is not None):
         print("\nHyperparameter: " + list(params.keys())[0]) # JUST KEY
-        print("Values Tested: {} values from {} to {}".format( len( list(params.values())[0] ), 
-                                                               min( list(params.values())[0] ), 
-                                                               max( list(params.values())[0] ) ) )
+        print("Values Tested: {} values from {} to {}".format( 
+                                            len( list(params.values())[0] ), 
+                                            min( list(params.values())[0] ), 
+                                            max( list(params.values())[0] ) ) )
+    print("\nWorking...")
     
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         
-
+        
+        
     
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #                           MAIN FUNCTION
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        
 if __name__ == "__main__":
-    
-# ------------------- HYPERPARAMETERS TO TEST -------------------------
-    # Change these as required. 
-    NB_params = None #architecture selection is trivial
-    DT_params = {
-                'max_depth': np.linspace(1,100,100) #temp
-                } 
-    
-    NN_params = {
-                'n_neighbors': np.linspace(1,200, 200, dtype=int)
-                } 
-    
-    SVM_params ={
-                'C': np.linspace(0.5,5,91) #temp
-                } 
-# ---------------------------------------------------------------------
 
-
-# ------------------- DATA-SPECIFIC VARIABLES -------------------------
+# --------------------- Data-specific variables ----------------------
     # Change these as required. 
     class_labels = ("Malignant", "Benign") #corresponding to (1,0) binary vals
     path_to_data = 'medical_records.data'
-# ---------------------------------------------------------------------
+    test_set_ratio = 0.2
+    
+    # Store a list of all parameters necesary for testing and classification
+    function_list = [
+                       build_NB_classifier,
+                       build_DT_classifier,
+                       build_NN_classifier,
+                       build_SVM_classifier
+                       ]
 
 
-
-# ----------------- TESTING AND LEARNING BEGINS -----------------------
+# ------------------------ Experiment process ------------------------
 
     # Print the team.
     print_introduction(my_team())
@@ -467,58 +512,47 @@ if __name__ == "__main__":
     data, labels = prepare_dataset(path_to_data)
     
     # Split the dataset into the corresponding ratio for crossvalidation. 
-    train_data, train_labels, test_data, test_labels = split_data(data,labels,0.8)
+    # Set random_state to a hard-coded number to ensure repeatability.
+    train_data,test_data,train_labels,test_labels = model_selection.train_test_split(
+            data, labels, test_size=test_set_ratio, random_state=1)  
     
-    # Store a list of all parameters necesary for testing and classification
-    classifier_list = [
-#                       ["NAIVE BAYES", build_NB_classifier, DT_params],
-                       ["DECISION TREE", build_DT_classifier, DT_params],
-                       ["NEAREST NEIGHBOURS", build_NN_classifier, NN_params],
-                       ["SUPPORT VECTOR MACHINE", build_SVM_classifier, SVM_params]]
+    # Print split information.
+    print('\n\nTraining set: {:.1f}% of data, {} samples, {} positive ({:.1f}%)'.format(
+        (1-test_set_ratio)*100, len(train_data), sum(train_labels), (sum(train_labels)*100)/len(train_data)))
+    print('Test set: {:.1f}% of data, {} samples, {} positive ({:.1f}%)'.format(
+        test_set_ratio*100, len(test_data), sum(test_labels), (sum(test_labels)*100)/len(test_data)))
 
-    # Analyze each classifier. 
-    for name, function, params in classifier_list:
+    # Analyze and use each classifier, show results.  
+    for function in function_list:
         
-        print_clf_intro(name, params)
+        if function is build_NB_classifier: 
+            # Indicator for NBC. 
+            # Handle this differently, since no optimization is necessary.
+            t0 = time.time()
+            clf, cv_results = function(train_data, train_labels)
+            print_cv_report(cv_results)
         
-        # Create appropriate optimized classifier and report VALIDATION metrics.
-        clf = function(train_data, train_labels, params)
-        print_grid_search_report(clf)
-        
+        else:
+            # Create appropriate optimized classifier and report VALIDATION metrics.
+            t0 = time.time()
+            clf = function(train_data, train_labels)
+            print_grid_search_report(clf)
+            plot_grid_search_results(clf)
+            
+        t1 = time.time()   
+        print("\nCross-validation, optimization, and fitting took {:.6f} seconds total.".format(t1-t0))
+
         # Quantify the classifier's performance on the TRAINING set.
-        prediction_train_labels = clf.predict(train_data)
+        pred_train_labels = clf.predict(train_data)
+        t2 = time.time()
         print("\n\n- - - TRAINING REPORT - - -")
-        print_prediction_report(prediction_train_labels, train_labels, class_labels)
+        print_prediction_report(pred_train_labels, train_labels, class_labels)
+        print("\nPrediction on training set took {:.6f} seconds.".format(t2-t1))
         
         # Quantify the classifier's performance on TEST SET. 
-        prediction_labels = clf.predict(test_data)
+        t3 = time.time()
+        pred_labels = clf.predict(test_data)
+        t4 = time.time()
         print("\n\n- - - TEST REPORT - - -")
-        print_prediction_report(prediction_labels, test_labels, class_labels)
-        
-
-
-
-
-
-
-
-
-    '''
-    USEFUL SKLEARN FUNCTIONS:
-        neighbors.KNeighborsClassifier
-        
-        naive_bayes.GaussianNB
-        
-        model_selection.cross_validate
-        
-        svm.SVC
-        
-        tree.DecisionTreeClassifier
-        
-        model_selection.train_test_split
-        
-        metrics.classification_report
-        metrics.confusion_matrix
-    
-    '''
-
+        print_prediction_report(pred_labels, test_labels, class_labels)
+        print("\nPrediction on test set took {:.6f} seconds.".format(t4-t3))
