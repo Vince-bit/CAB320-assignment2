@@ -8,28 +8,46 @@ Write a main function that calls the different functions to perform the required
 and repeat your experiments.
 
 '''
+
+
 '''
-    Possible metrics: 
-        - neg_log_loss: returns neegative "Logarithmic Loss", like accuracy
-          but taking into account the uncertainty of the answer (?)
+    INSTRUCTIONS:
+        - Simply running the code as is will work, no actions required as long
+          as the dataset is in the same directory as this file. 
           
-        - accuracy: proportion of predictions that exactly match those
-          corresponding in the list of true labels
           
-        - precision: # correct +ve results, divided by # ALL +ve results returned
-            tp / (tp + fp)
-            
-        - recall: # correct +ve results, divided by # all TRUE +ve results
-            tp / (tp + fn)
-            
-        - f1_score: harmonic average between precision and recall 
-            best values = 1, worst values = 0
-            
-        - support: number of occurences of a given class in list of true labels
+    TO CHANGE DATASETS: 
+        - scroll all the way down to the main function and 
+          change "path_to_data"
+        - the class label names should also be changed to reflect those
+          in the new dataset - the code handles two, binary class labels. 
+     TO CHANGE TRAIN-TEST RATIO: 
+         - scroll to main, change "test_set_ratio"
+     TO CHANGE HYPERPARAMETERS: 
+         - go into each build_AB_classifier function
+           and change the dict variable called "params". Both param name and 
+           values/ranges can be changed, and the rest of the code will handle
+           this change totally fine.
+     TO CHANGE THE RE-FIT METRIC: 
+         - this metric determines how the hyperparameter search (GridSearchCV) 
+           picks the best set of hyperparameter values.
+         - it can be changed by going into each classifier function and 
+           changing "refit" parameter passed to GridSearchCV 
+         - the rest of the code will handle this change without any more action 
+           required
+     TO CHANGE THE SCORING METRICS: 
+         - as long as the refit metric is included here, each classifier 
+           function can have GridSearchCV performance reported on any metrics 
+           desired
+         - they can even be different between classifiers
+         - scroll to the classifier function and enter string names of the 
+           metrics desired into the GridSearchCV list parameter labelled
+           "scoring"
+         - the rest of the code will handle this change. 
+       
         
-        - roc_auc: "Area Under Curve"
-            best values = 1, value for random assignment = 0.5 
-            
+    Nothing else should have to be changed.       
+
 '''
 
 
